@@ -7,7 +7,7 @@ const STORAGE_KEY = 'nlt-progress';
 const UNLOCK_ORDER = [
   'cardinals', 'ordinals', 'years', 'fractions', 'decimals',
   'currencies', 'percentages', 'roomBus', 'sports',
-  'temperatures', 'largeNumbers', 'mixed'
+  'temperatures', 'large', 'mixed'
 ];
 
 const MIXED_REQUIRES = 6;

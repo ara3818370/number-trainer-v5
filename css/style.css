@@ -451,10 +451,27 @@ body {
   height: 100%;
 }
 
+/* Mastery checkmark */
+.category-checkmark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 0.75rem;
+  color: var(--correct);
+  font-weight: 700;
+}
+
 /* Locked state */
 .category-card.locked {
   opacity: 0.4;
   pointer-events: auto;
+}
+
+.category-lock {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  font-size: 0.75rem;
 }
 
 .lock-overlay {
@@ -595,6 +612,34 @@ body {
 }
 
 .lang-flag-btn.active {
+  border-color: var(--accent);
+}
+
+/* settings.js uses .settings-flags (alias for .settings-lang-flags) */
+.settings-flags {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.settings-flag-btn {
+  width: 44px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 2px solid transparent;
+  background: var(--bg);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  font-family: var(--font);
+  padding: 0;
+}
+
+.settings-flag-btn.active {
   border-color: var(--accent);
 }
 

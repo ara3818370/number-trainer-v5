@@ -1,6 +1,7 @@
 // app.js — Orchestrator for Number Trainer v5 "Steve Edition"
 // Complete rewrite: wires together all modules with progressive disclosure,
 // onboarding, settings, focus mode, and training loop.
+// THIS is the single source of truth for the training loop.
 
 import { initSettings, getSetting, setSetting, onSettingChange, showSettings, hideSettings, getThemeForSystem } from './settings.js';
 import { initI18n, t, applyTranslations, setUILang, setLearnLang, getLearnLang, getUILang, getCategoryLabel } from './i18n.js';
@@ -8,7 +9,6 @@ import { initProgress, getUnlockedCategories, getMasteredCategories, isCategoryU
 import { shouldShowOnboarding, runOnboarding, handleOnboardingAnswer } from './onboarding.js';
 import { CATEGORY_META } from './categories.js';
 import * as game from './game.js';
-import * as ui from './ui.js';
 import * as tts from './tts.js';
 import * as sound from './sound.js';
 import * as haptics from './haptics.js';
@@ -24,10 +24,6 @@ const TTS_REINFORCE_DELAY_MS = 200;
 // ── State ──────────────────────────────────────────────────────────────────
 
 let currentCategory = null;
-let currentStreak = 0;
-let maxSessionStreak = 0;
-let sessionScore = 0;
-let sessionTotal = 0;
 let sessionLength = 10;
 let isProcessingAnswer = false;
 let onboardingFlow = null;
@@ -61,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   onSettingChange((key, value) => {
     switch (key) {
       case 'theme':
-        applyTheme(key === 'theme' ? getThemeForSystem() : value);
+        applyTheme(getThemeForSystem());
         break;
       case 'uiLang':
         setUILang(value);
@@ -73,12 +69,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         break;
       case 'sessionLength':
         sessionLength = value;
-        break;
-      case 'speed':
-      case 'mode':
-      case 'sounds':
-      case 'haptics':
-        // These are read dynamically when needed
         break;
     }
   });
@@ -95,7 +85,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 10. Decide first screen
   const hasLang = localStorage.getItem('nlt-settings');
   if (!hasLang || !getSetting('learnLang')) {
-    // First launch — show language selection
     showScreen('lang-select');
   } else if (shouldShowOnboarding()) {
     showScreen('onboarding');
@@ -110,23 +99,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 const SCREENS = ['lang-select', 'menu', 'training', 'summary', 'onboarding'];
 
-/**
- * Show a screen, hiding all others with a crossfade transition.
- * @param {string} screenId
- */
 function showScreen(screenId) {
   for (const id of SCREENS) {
     const el = document.getElementById('screen-' + id);
     if (!el) continue;
-
     if (id === screenId) {
       el.classList.add('active');
     } else {
       el.classList.remove('active');
     }
   }
-
-  // Re-render dynamic screens
   if (screenId === 'menu') renderCategoryMenu();
 }
 
@@ -136,8 +118,6 @@ function applyTheme(resolvedTheme) {
   document.documentElement.removeAttribute('data-theme');
   if (resolvedTheme === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else if (resolvedTheme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-
-  // Update meta theme-color
   const color = resolvedTheme === 'dark' ? '#1c1c1e' : '#f5f5f7';
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', color));
 }
@@ -151,7 +131,6 @@ function wireLangSelect() {
   container.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-lang]');
     if (!btn) return;
-
     const lang = btn.dataset.lang;
     setSetting('uiLang', lang);
     setSetting('learnLang', lang);
@@ -159,7 +138,6 @@ function wireLangSelect() {
     setLearnLang(lang);
     applyTranslations();
 
-    // Proceed to onboarding
     if (shouldShowOnboarding()) {
       showScreen('onboarding');
       startOnboarding();
@@ -181,20 +159,17 @@ function startOnboarding() {
   // Reset UI
   optionsEl.innerHTML = '';
   messageEl.textContent = '';
-  messageEl.style.opacity = '0';
+  messageEl.classList.add('hidden');
 
   onboardingFlow = runOnboarding({
     async onPlay(text) {
-      // Pulse the circle during playback
       circleEl.classList.add('playing');
       const mode = getSetting('mode');
       if (mode === 'focus') {
-        // Focus mode: show text instead
         circleEl.innerHTML = `<span class="focus-number">${text}</span>`;
         await delay(1500);
       } else {
         await tts.speak(text, getSetting('speed')).catch(() => {
-          // Fallback: show text if TTS fails
           circleEl.innerHTML = `<span class="focus-number">${text}</span>`;
         });
       }
@@ -207,8 +182,8 @@ function startOnboarding() {
         const btn = document.createElement('button');
         btn.className = 'option-btn onboarding-option';
         btn.textContent = opt.display;
-        btn.style.animationDelay = `${i * 100}ms`;
-        btn.classList.add('visible');
+        btn.style.opacity = '1';
+        btn.style.transform = 'none';
 
         btn.addEventListener('click', () => {
           if (isProcessingAnswer) return;
@@ -231,7 +206,6 @@ function startOnboarding() {
                 if (getSetting('sounds')) sound.playWrong();
                 if (getSetting('haptics')) haptics.hapticWrong();
 
-                // Replay correct audio
                 const q = onboardingFlow.question;
                 if (getSetting('mode') !== 'focus') {
                   await delay(300);
@@ -239,7 +213,7 @@ function startOnboarding() {
                 }
                 messageEl.textContent = t('onboarding.now_you_know');
               }
-              messageEl.style.opacity = '1';
+              messageEl.classList.remove('hidden');
             },
 
             onComplete() {
@@ -258,7 +232,6 @@ function startOnboarding() {
     onComplete() {},
   });
 
-  // Start the flow
   onboardingFlow.start();
 }
 
@@ -273,7 +246,6 @@ function renderCategoryMenu() {
   const allCategories = UNLOCK_ORDER;
   const totalVisible = allCategories.length;
 
-  // Set data-count for CSS layout
   container.setAttribute('data-count', String(totalVisible));
   container.innerHTML = '';
 
@@ -318,12 +290,10 @@ function renderCategoryMenu() {
       card.appendChild(lock);
     }
 
-    // Click handler
     card.addEventListener('click', () => {
       if (isUnlocked) {
         startTraining(catId);
       } else {
-        // Show unlock hint toast
         const prereq = getPrerequisiteCategory(catId);
         const prereqName = prereq ? getCategoryLabel(prereq) : '...';
         showToast(t('categories.unlock_hint').replace('{category}', prereqName));
@@ -338,14 +308,15 @@ function renderCategoryMenu() {
 
 function startTraining(categoryId) {
   currentCategory = categoryId;
-  currentStreak = 0;
-  maxSessionStreak = 0;
-  sessionScore = 0;
-  sessionTotal = 0;
   sessionLength = getSetting('sessionLength');
   isProcessingAnswer = false;
 
+  // Start game state
   game.startSession(categoryId);
+
+  // Ensure audio context (user gesture chain)
+  sound.ensureContext();
+
   showScreen('training');
 
   // Update UI header
@@ -353,40 +324,53 @@ function startTraining(categoryId) {
   if (catLabel) catLabel.textContent = getCategoryLabel(categoryId);
 
   // Update progress bar
-  updateProgressBar();
+  updateProgressBar(0);
+
+  // Reset streak display
+  updateStreakDisplay(0);
+
+  // Reset body filter
+  document.body.style.filter = '';
 
   // Start first round
   playNextRound();
 }
 
 function playNextRound() {
-  if (sessionLength !== Infinity && sessionTotal >= sessionLength) {
+  // Check session completion
+  if (game.isSessionComplete(sessionLength)) {
     showSummary();
     return;
   }
 
   isProcessingAnswer = false;
-  const round = game.nextRound();
+
+  // Generate question (pure data from game.js)
+  const round = game.generateQuestion();
+  if (!round) {
+    console.error('game.generateQuestion() returned null');
+    showScreen('menu');
+    return;
+  }
 
   // Clear options
   const optionsGrid = document.getElementById('options-grid');
   if (optionsGrid) optionsGrid.innerHTML = '';
 
   // Update streak display
-  updateStreakDisplay();
+  const streak = game.getStreak();
+  updateStreakDisplay(streak.current);
 
   // Update progress bar
-  updateProgressBar();
+  const score = game.getScore();
+  updateProgressBar(score.total);
 
   const mode = getSetting('mode');
 
   if (mode === 'focus') {
-    // Focus mode: show number as text card
     showFocusCard(round.target.ttsText);
-    // After contemplation pause, show options
     setTimeout(() => renderOptions(round.options, round.target), CONTEMPLATION_PAUSE_MS);
   } else {
-    // Audio mode: play via breathing circle
     hideFocusCard();
     playAudioRound(round);
   }
@@ -394,21 +378,19 @@ function playNextRound() {
 
 async function playAudioRound(round) {
   const circle = document.getElementById('breathing-circle');
-  if (circle) {
-    circle.classList.add('playing');
-  }
+  if (circle) circle.classList.add('playing');
 
   try {
     const sentence = game.getCurrentSentence();
-    await tts.speak(sentence, getSetting('speed'));
+    if (sentence) {
+      await tts.speak(sentence, getSetting('speed'));
+    }
   } catch {
-    // Fallback to focus mode for this round
+    // TTS failed — show focus card as fallback for this round
     showFocusCard(round.target.ttsText);
   }
 
-  if (circle) {
-    circle.classList.remove('playing');
-  }
+  if (circle) circle.classList.remove('playing');
 
   // Contemplation pause
   await delay(CONTEMPLATION_PAUSE_MS);
@@ -422,27 +404,33 @@ function renderOptions(options, target) {
   if (!grid) return;
   grid.innerHTML = '';
 
-  const correctDisplay = target.display;
-
-  options.forEach((opt, i) => {
+  options.forEach((displayText, i) => {
     const btn = document.createElement('button');
     btn.className = 'option-btn';
-    btn.textContent = opt;
-    btn.style.animationDelay = `${i * OPTION_STAGGER_MS}ms`;
+    btn.textContent = displayText;
 
-    // Stagger in
-    requestAnimationFrame(() => btn.classList.add('visible'));
+    // Start invisible for stagger animation
+    btn.style.opacity = '0';
+    btn.style.transform = 'translateY(8px)';
 
-    btn.addEventListener('click', () => handleAnswer(opt, i, options, correctDisplay, target));
+    btn.addEventListener('click', () => handleAnswer(displayText, i, options, target));
     grid.appendChild(btn);
+
+    // Stagger reveal
+    setTimeout(() => {
+      btn.style.transition = 'opacity 200ms ease-out, transform 200ms ease-out';
+      btn.style.opacity = '1';
+      btn.style.transform = 'translateY(0)';
+    }, i * OPTION_STAGGER_MS);
   });
 }
 
-async function handleAnswer(selectedDisplay, buttonIndex, options, correctDisplay, target) {
+async function handleAnswer(selectedDisplay, buttonIndex, options, target) {
   if (isProcessingAnswer) return;
   isProcessingAnswer = true;
 
-  const result = game.submitAnswer(selectedDisplay);
+  // Record answer in game state (single source of truth)
+  const result = game.recordAnswer(selectedDisplay);
   if (!result) { isProcessingAnswer = false; return; }
 
   const grid = document.getElementById('options-grid');
@@ -452,51 +440,36 @@ async function handleAnswer(selectedDisplay, buttonIndex, options, correctDispla
 
   if (result.isCorrect) {
     // ── Correct flow ──
-    currentStreak++;
-    if (currentStreak > maxSessionStreak) maxSessionStreak = currentStreak;
-    sessionScore++;
-    sessionTotal++;
-
-    // Visual feedback
     if (buttons[buttonIndex]) buttons[buttonIndex].classList.add('correct');
     buttons.forEach((btn, i) => { if (i !== buttonIndex) btn.classList.add('dimmed'); });
 
-    // Sound + haptic
     if (soundsOn) sound.playCorrect();
     if (hapticsOn) haptics.hapticCorrect();
 
     // Streak effects
-    handleStreakEffects();
+    handleStreakEffects(result.streak);
 
-    // TTS reinforcement (after 200ms)
+    // TTS reinforcement
     if (getSetting('mode') !== 'focus') {
       setTimeout(() => tts.speak(target.ttsText, getSetting('speed')).catch(() => {}), TTS_REINFORCE_DELAY_MS);
     }
 
-    // Hold, then next
     await delay(CORRECT_HOLD_MS);
     playNextRound();
 
   } else {
     // ── Wrong flow ──
-    currentStreak = 0;
-    sessionTotal++;
-
-    // Visual feedback
     if (buttons[buttonIndex]) buttons[buttonIndex].classList.add('wrong');
     buttons.forEach((btn, i) => {
       if (i !== buttonIndex && i !== result.correctIndex) btn.classList.add('dimmed');
     });
 
-    // Sound + haptic
     if (soundsOn) sound.playWrong();
     if (hapticsOn) haptics.hapticWrong();
 
     // Reveal correct after 300ms
     setTimeout(() => {
       if (buttons[result.correctIndex]) buttons[result.correctIndex].classList.add('reveal-correct');
-
-      // Speak correct answer
       if (getSetting('mode') !== 'focus') {
         tts.speak(target.ttsText, getSetting('speed')).catch(() => {});
       }
@@ -505,7 +478,9 @@ async function handleAnswer(selectedDisplay, buttonIndex, options, correctDispla
     // Reset body hue shift
     document.body.style.filter = '';
 
-    // Hold, then next
+    // Update streak display (streak is now 0)
+    updateStreakDisplay(0);
+
     await delay(WRONG_HOLD_MS);
     playNextRound();
   }
@@ -513,18 +488,29 @@ async function handleAnswer(selectedDisplay, buttonIndex, options, correctDispla
 
 // ── Streak Effects ─────────────────────────────────────────────────────────
 
-function handleStreakEffects() {
+function handleStreakEffects(streak) {
   const circle = document.getElementById('breathing-circle');
   const soundsOn = getSetting('sounds');
   const hapticsOn = getSetting('haptics');
 
-  if (currentStreak >= 3 && circle) {
-    circle.style.filter = `brightness(1.08)`;
+  // Circle brightness based on streak
+  if (circle) {
+    if (streak >= 10) {
+      circle.style.filter = 'brightness(1.25)';
+    } else if (streak >= 5) {
+      circle.style.filter = 'brightness(1.15)';
+    } else if (streak >= 3) {
+      circle.style.filter = 'brightness(1.08)';
+    } else {
+      circle.style.filter = '';
+    }
   }
 
-  if (currentStreak === 5 || currentStreak === 10 || currentStreak === 15) {
-    // Bloom animation
+  // Milestone effects (bloom + sound)
+  if (streak === 5 || (streak >= 10 && streak % 5 === 0)) {
     if (circle) {
+      circle.classList.remove('bloom');
+      void circle.offsetWidth; // Force reflow
       circle.classList.add('bloom');
       setTimeout(() => circle.classList.remove('bloom'), 400);
     }
@@ -533,22 +519,22 @@ function handleStreakEffects() {
   }
 
   // Hue shift at 10+
-  if (currentStreak >= 10) {
-    const extraFives = Math.floor((currentStreak - 10) / 5);
+  if (streak >= 10) {
+    const extraFives = Math.floor((streak - 10) / 5);
     const deg = Math.min(5 + extraFives, 15);
     document.body.style.transition = 'filter 2s ease';
     document.body.style.filter = `hue-rotate(${deg}deg)`;
   }
 
-  updateStreakDisplay();
+  updateStreakDisplay(streak);
 }
 
-function updateStreakDisplay() {
+function updateStreakDisplay(streak) {
   const counter = document.getElementById('streak-counter');
   if (!counter) return;
 
-  if (currentStreak >= 3) {
-    counter.textContent = t('streak.counter').replace('{n}', String(currentStreak));
+  if (streak >= 3) {
+    counter.textContent = t('streak.counter').replace('{n}', String(streak));
     counter.classList.add('visible');
   } else {
     counter.classList.remove('visible');
@@ -557,14 +543,14 @@ function updateStreakDisplay() {
 
 // ── Progress Bar ───────────────────────────────────────────────────────────
 
-function updateProgressBar() {
+function updateProgressBar(currentTotal) {
   const fill = document.getElementById('progress-fill');
   if (!fill) return;
 
   if (sessionLength === Infinity || sessionLength <= 0) {
     fill.style.width = '0%';
   } else {
-    const pct = Math.min((sessionTotal / sessionLength) * 100, 100);
+    const pct = Math.min((currentTotal / sessionLength) * 100, 100);
     fill.style.width = pct + '%';
   }
 }
@@ -574,9 +560,12 @@ function updateProgressBar() {
 function showFocusCard(text) {
   const card = document.getElementById('focus-card');
   const circle = document.getElementById('breathing-circle');
-  if (card) {
-    card.querySelector('.focus-number').textContent = text;
-    card.querySelector('.focus-prompt').textContent = t('focus.question');
+  const numberEl = document.getElementById('focus-number');
+  const promptEl = document.getElementById('focus-prompt');
+
+  if (card && numberEl) {
+    numberEl.textContent = text;
+    if (promptEl) promptEl.textContent = t('focus.question');
     card.classList.remove('hidden');
   }
   if (circle) circle.classList.add('hidden');
@@ -594,7 +583,8 @@ function hideFocusCard() {
 function showSummary() {
   showScreen('summary');
 
-  const pct = sessionTotal > 0 ? Math.round((sessionScore / sessionTotal) * 100) : 0;
+  const stats = game.getSessionStats();
+  const pct = stats.percent;
 
   // Animate percentage
   const pctEl = document.getElementById('summary-percent');
@@ -608,20 +598,20 @@ function showSummary() {
 
   // Update score spans
   const correctEl = document.getElementById('summary-correct');
-  if (correctEl) correctEl.textContent = sessionScore;
+  if (correctEl) correctEl.textContent = stats.correct;
   const totalEl = document.getElementById('summary-total');
-  if (totalEl) totalEl.textContent = sessionTotal;
+  if (totalEl) totalEl.textContent = stats.total;
 
   // Record to progress system
   const { newUnlocks, newMastery } = recordSession(
-    currentCategory, sessionScore, sessionTotal, maxSessionStreak
+    currentCategory, stats.correct, stats.total, stats.maxStreak
   );
 
   // Play completion sound
   if (getSetting('sounds')) sound.playComplete();
   if (getSetting('haptics')) haptics.hapticComplete();
 
-  // Show unlock notification if applicable
+  // Show unlock notification
   if (newUnlocks.length > 0) {
     const unlockName = getCategoryLabel(newUnlocks[0]);
     setTimeout(() => {
@@ -633,9 +623,6 @@ function showSummary() {
   document.body.style.filter = '';
 }
 
-/**
- * Animate a number counting up.
- */
 function countUp(element, target, durationMs = 800) {
   const start = performance.now();
   function update(now) {
@@ -658,10 +645,8 @@ function showToast(message, durationMs = 2000) {
     toast.className = 'toast';
     document.body.appendChild(toast);
   }
-
   toast.textContent = message;
   toast.classList.add('visible');
-
   setTimeout(() => toast.classList.remove('visible'), durationMs);
 }
 
@@ -670,21 +655,12 @@ function showToast(message, durationMs = 2000) {
 function wireEvents() {
   wireLangSelect();
 
-  // Settings button
+  // Settings button (menu screen)
   const settingsBtn = document.getElementById('btn-settings');
   if (settingsBtn) {
     settingsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       showSettings(settingsBtn);
-    });
-  }
-
-  // Training settings button
-  const trainSettingsBtn = document.getElementById('btn-training-settings');
-  if (trainSettingsBtn) {
-    trainSettingsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      showSettings(trainSettingsBtn);
     });
   }
 
@@ -704,6 +680,7 @@ function wireEvents() {
   if (circle) {
     circle.addEventListener('click', () => {
       if (isProcessingAnswer) return;
+      if (!game.isActive()) return;
       const mode = getSetting('mode');
       if (mode !== 'focus') {
         const sentence = game.getCurrentSentence();

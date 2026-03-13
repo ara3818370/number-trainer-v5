@@ -101,13 +101,13 @@ export function warmCircle(level) {
  */
 export function bloomCircle() {
   if (!circleEl) return;
-  circleEl.classList.remove('blooming');
+  circleEl.classList.remove('bloom');
   // Force reflow to restart animation
   void circleEl.offsetWidth;
-  circleEl.classList.add('blooming');
+  circleEl.classList.add('bloom');
 
   const onEnd = () => {
-    circleEl.classList.remove('blooming');
+    circleEl.classList.remove('bloom');
     circleEl.removeEventListener('animationend', onEnd);
   };
   circleEl.addEventListener('animationend', onEnd);

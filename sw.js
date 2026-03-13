@@ -16,7 +16,6 @@ const ASSETS = [
   './js/numbers-uk.js',
   './js/i18n.js',
   './js/ui.js',
-  './js/storage.js',
   './js/sound.js',
   './js/haptics.js',
   './js/progress.js',

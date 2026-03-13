@@ -120,11 +120,9 @@ function showScreen(screenId) {
     if (!el) continue;
 
     if (id === screenId) {
-      el.classList.remove('screen-hidden');
-      el.classList.add('screen-visible');
+      el.classList.add('active');
     } else {
-      el.classList.remove('screen-visible');
-      el.classList.add('screen-hidden');
+      el.classList.remove('active');
     }
   }
 
@@ -188,7 +186,7 @@ function startOnboarding() {
   onboardingFlow = runOnboarding({
     async onPlay(text) {
       // Pulse the circle during playback
-      circleEl.classList.add('audio-playing');
+      circleEl.classList.add('playing');
       const mode = getSetting('mode');
       if (mode === 'focus') {
         // Focus mode: show text instead
@@ -200,7 +198,7 @@ function startOnboarding() {
           circleEl.innerHTML = `<span class="focus-number">${text}</span>`;
         });
       }
-      circleEl.classList.remove('audio-playing');
+      circleEl.classList.remove('playing');
     },
 
     onShowOptions(options, correctIndex) {
@@ -224,14 +222,14 @@ function startOnboarding() {
                 const other = optionsEl.children[1 - i];
                 if (other) other.classList.add('dimmed');
                 if (getSetting('sounds')) sound.playCorrect();
-                if (getSetting('haptics')) haptics.correct();
+                if (getSetting('haptics')) haptics.hapticCorrect();
                 messageEl.textContent = t('onboarding.perfect');
               } else {
                 btn.classList.add('wrong');
                 const correctBtn = optionsEl.children[correctIndex];
                 if (correctBtn) correctBtn.classList.add('reveal-correct');
                 if (getSetting('sounds')) sound.playWrong();
-                if (getSetting('haptics')) haptics.wrong();
+                if (getSetting('haptics')) haptics.hapticWrong();
 
                 // Replay correct audio
                 const q = onboardingFlow.question;
@@ -351,7 +349,7 @@ function startTraining(categoryId) {
   showScreen('training');
 
   // Update UI header
-  const catLabel = document.getElementById('training-category');
+  const catLabel = document.getElementById('category-indicator');
   if (catLabel) catLabel.textContent = getCategoryLabel(categoryId);
 
   // Update progress bar
@@ -397,7 +395,7 @@ function playNextRound() {
 async function playAudioRound(round) {
   const circle = document.getElementById('breathing-circle');
   if (circle) {
-    circle.classList.add('audio-playing');
+    circle.classList.add('playing');
   }
 
   try {
@@ -409,7 +407,7 @@ async function playAudioRound(round) {
   }
 
   if (circle) {
-    circle.classList.remove('audio-playing');
+    circle.classList.remove('playing');
   }
 
   // Contemplation pause
@@ -465,7 +463,7 @@ async function handleAnswer(selectedDisplay, buttonIndex, options, correctDispla
 
     // Sound + haptic
     if (soundsOn) sound.playCorrect();
-    if (hapticsOn) haptics.correct();
+    if (hapticsOn) haptics.hapticCorrect();
 
     // Streak effects
     handleStreakEffects();
@@ -492,7 +490,7 @@ async function handleAnswer(selectedDisplay, buttonIndex, options, correctDispla
 
     // Sound + haptic
     if (soundsOn) sound.playWrong();
-    if (hapticsOn) haptics.wrong();
+    if (hapticsOn) haptics.hapticWrong();
 
     // Reveal correct after 300ms
     setTimeout(() => {
@@ -531,7 +529,7 @@ function handleStreakEffects() {
       setTimeout(() => circle.classList.remove('bloom'), 400);
     }
     if (soundsOn) sound.playStreak();
-    if (hapticsOn) haptics.streak();
+    if (hapticsOn) haptics.hapticStreak();
   }
 
   // Hue shift at 10+
@@ -608,11 +606,11 @@ function showSummary() {
     countUp(pctEl, pct);
   }
 
-  // Subtitle
-  const subtitleEl = document.getElementById('summary-subtitle');
-  if (subtitleEl) {
-    subtitleEl.textContent = `${sessionScore} / ${sessionTotal}`;
-  }
+  // Update score spans
+  const correctEl = document.getElementById('summary-correct');
+  if (correctEl) correctEl.textContent = sessionScore;
+  const totalEl = document.getElementById('summary-total');
+  if (totalEl) totalEl.textContent = sessionTotal;
 
   // Record to progress system
   const { newUnlocks, newMastery } = recordSession(
@@ -620,8 +618,8 @@ function showSummary() {
   );
 
   // Play completion sound
-  if (getSetting('sounds')) sound.playSessionComplete();
-  if (getSetting('haptics')) haptics.sessionComplete();
+  if (getSetting('sounds')) sound.playComplete();
+  if (getSetting('haptics')) haptics.hapticComplete();
 
   // Show unlock notification if applicable
   if (newUnlocks.length > 0) {
@@ -695,7 +693,7 @@ function wireEvents() {
   if (backBtn) {
     backBtn.addEventListener('click', () => {
       tts.stop();
-      game.endSession();
+      game.stopSession();
       document.body.style.filter = '';
       showScreen('menu');
     });
@@ -710,24 +708,24 @@ function wireEvents() {
       if (mode !== 'focus') {
         const sentence = game.getCurrentSentence();
         if (sentence) {
-          circle.classList.add('audio-playing');
+          circle.classList.add('playing');
           tts.speak(sentence, getSetting('speed'))
-            .then(() => circle.classList.remove('audio-playing'))
-            .catch(() => circle.classList.remove('audio-playing'));
+            .then(() => circle.classList.remove('playing'))
+            .catch(() => circle.classList.remove('playing'));
         }
       }
     });
   }
 
   // Summary buttons
-  const againBtn = document.getElementById('btn-again');
+  const againBtn = document.getElementById('btn-new-session');
   if (againBtn) {
     againBtn.addEventListener('click', () => {
       if (currentCategory) startTraining(currentCategory);
     });
   }
 
-  const menuBtn = document.getElementById('btn-categories');
+  const menuBtn = document.getElementById('btn-home');
   if (menuBtn) {
     menuBtn.addEventListener('click', () => showScreen('menu'));
   }

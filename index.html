@@ -209,7 +209,7 @@
       </div>
 
       <!-- Message after answer -->
-      <p id="onboarding-message" class="onboarding-message hidden"></p>
+      <p id="onboarding-message" class="onboarding-message hidden" aria-live="polite"></p>
     </div>
   </section>
 
@@ -254,60 +254,7 @@
     <!-- "Unlock All" hidden gesture area (swipe-down on header) -->
     <div id="unlock-all-zone" class="unlock-all-zone" aria-hidden="true"></div>
 
-    <!-- Settings Overlay -->
-    <div id="settings-overlay" class="settings-overlay hidden" role="dialog" aria-label="Settings">
-      <!-- Control 1: Speed -->
-      <div class="settings-row">
-        <label class="settings-label" data-i18n="settings.speed">Speed</label>
-        <div class="segmented-control" data-setting="speed">
-          <button class="segment" data-value="slow" data-i18n="speed.slow">Slow</button>
-          <button class="segment active" data-value="normal" data-i18n="speed.normal">Normal</button>
-          <button class="segment" data-value="fast" data-i18n="speed.fast">Fast</button>
-        </div>
-      </div>
-
-      <!-- Control 2: Session Length -->
-      <div class="settings-row">
-        <label class="settings-label" data-i18n="settings.questions">Questions</label>
-        <div class="segmented-control" data-setting="session">
-          <button class="segment active" data-value="10">10</button>
-          <button class="segment" data-value="20">20</button>
-          <button class="segment" data-value="infinite">∞</button>
-        </div>
-      </div>
-
-      <!-- Control 3: Mode -->
-      <div class="settings-row">
-        <label class="settings-label" data-i18n="settings.mode">Mode</label>
-        <div class="segmented-control" data-setting="mode">
-          <button class="segment active" data-value="audio">🔊 Audio</button>
-          <button class="segment" data-value="focus">📖 Focus</button>
-        </div>
-      </div>
-
-      <!-- Control 4: Theme -->
-      <div class="settings-row">
-        <label class="settings-label" data-i18n="settings.theme">Theme</label>
-        <div class="segmented-control" data-setting="theme">
-          <button class="segment active" data-value="auto">Auto</button>
-          <button class="segment" data-value="light">Light</button>
-          <button class="segment" data-value="dark">Dark</button>
-        </div>
-      </div>
-
-      <!-- Control 5: Language -->
-      <div class="settings-row">
-        <label class="settings-label" data-i18n="settings.language">Language</label>
-        <div class="settings-lang-flags">
-          <button class="lang-flag-btn active" data-lang="en" aria-label="English">🇬🇧</button>
-          <button class="lang-flag-btn" data-lang="de" aria-label="Deutsch">🇩🇪</button>
-          <button class="lang-flag-btn" data-lang="uk" aria-label="Українська">🇺🇦</button>
-        </div>
-      </div>
-
-      <!-- Unlock All -->
-      <div id="btn-unlock-all" class="unlock-all" data-i18n="settings.unlockAll">Unlock all categories</div>
-    </div>
+    <!-- Settings overlay is created dynamically by settings.js -->
   </section>
 
 
@@ -399,10 +346,6 @@
        Toast notification
        ════════════════════════════════════════════════════════════════════ -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-
-  <!-- Settings backdrop (tap outside to close) -->
-  <div id="settings-backdrop" class="settings-backdrop hidden"></div>
 
 
   <!-- JS entry point -->
